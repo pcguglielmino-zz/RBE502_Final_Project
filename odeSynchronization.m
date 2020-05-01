@@ -2,8 +2,8 @@ function [dx] = odeSynchronization(t, x, param, a1, a2, p)
 %odeSynchronization Function to control the synchronizing of 2 dof
 %manipulators
 
-    % x is a multidimensional array in the form of 
-    % [[q1_1, dq1_1, q1_2, dq1_2],[q2_1, dq2_1, q2_2, dq2_2],...];
+    % x is an in the form of 
+    % [[q1_1, dq1_1, q1_2, dq1_2, q2_1, dq2_1, q2_2, dq2_2],...];
 
     % convert param to system values
     m1 = param(1);
@@ -19,14 +19,6 @@ function [dx] = odeSynchronization(t, x, param, a1, a2, p)
     a = I1+I2+m1*r1^2+ m2*(l1^2+ r2^2);
     b = m2*l1*r2;
     d = I2+ m2*r2^2;
-    
-    % the actual dynamic model of the system:
-    Mmat = [a+2*b*cos(x(2)), d+b*cos(x(2));  d+b*cos(x(2)), d];
-    Cmat = [-b*sin(x(2))*x(4), -b*sin(x(2))*(x(3)+x(4)); b*sin(x(2))*x(3),0];
-%     Gmat =  [m1*g*r1*cos(x(1))+m2*g*(l1*cos(x(1))+r2*cos(x(1)+x(2)));
-%         m2*g*r2*cos(x(1)+x(2))];
-%     invM = inv(Mmat);
-%     invMC = invM*Cmat;
     
     % Generate trajectory
     vec_t = [1; t; t^2; t^3; t^4; t^5]; % quintic polynomials
@@ -44,27 +36,68 @@ function [dx] = odeSynchronization(t, x, param, a1, a2, p)
     ddq_d =[a1_acc*vec_t; a2_acc* vec_t];
     
     
-    % x is a multidimensional array in the form of 
-    % [[q1_1, dq1_1, q1_2, dq1_2],[q2_1, dq2_1, q2_2, dq2_2],...];
+    % x is an array in the form of 
+    % [[q1_1, dq1_1, q1_2, dq1_2, q2_1, dq2_1, q2_2, dq2_2],...];
     % s = dq - dq_r = dq - (dq_d - V*(q - q_d))
     
-    V = eye(2);
-    K1 = 5 * eye(2);
-    K2 = 3 * eye(2);
+    V = 10 * eye(2);
+    K1 = 100 * eye(2);
+    K2 = 4 * eye(2);
     
     for i = 1:p
-        s = [x(wrap_index(p, i) + 2); x(wrap_index(p, i) + 4)] - (dq_d - V*([x(wrap_index(p, i) + 1); x(wrap_index(p, i) + 3)] - q_d));
-        s_minus = [x(wrap_index(p, i-1) + 2); x(wrap_index(p, i-1) + 4)] - (dq_d - V*([x(wrap_index(p, i-1) + 1); x(wrap_index(p, i-1) + 3)] - q_d));
-        s_plus = [x(wrap_index(p, i+1) + 2); x(wrap_index(p, i+1) + 4)] - (dq_d - V*([x(wrap_index(p, i+1) + 1); x(wrap_index(p, i+1) + 3)] - q_d));
+        
+        % state in form [q_1, dq_1, q_2, dq_2]'
+        
+        state_minus = [x(wrap_index(p, i-1) + 1);
+                       x(wrap_index(p, i-1) + 2);
+                       x(wrap_index(p, i-1) + 3);
+                       x(wrap_index(p, i-1) + 4)];
+        
+        state = [x(wrap_index(p, i) + 1);
+                 x(wrap_index(p, i) + 2);
+                 x(wrap_index(p, i) + 3);
+                 x(wrap_index(p, i) + 4)];
+        
+        state_plus = [x(wrap_index(p, i+1) + 1);
+                     x(wrap_index(p, i+1) + 2);
+                     x(wrap_index(p, i+1) + 3);
+                     x(wrap_index(p, i+1) + 4)];
+        
+        % the actual dynamic model of the system:
+        Mmat = [a+2*b*cos(state(3)), d+b*cos(state(3));  d+b*cos(state(3)), d];
+        Cmat = [-b*sin(state(3))*state(4), -b*sin(state(3))*(state(2)+state(4)); b*sin(state(3))*state(2),0];
+        Gmat =  [m1*g*r1*cos(state(1))+m2*g*(l1*cos(state(1))+r2*cos(state(1)+state(3)));
+            m2*g*r2*cos(state(1)+state(3))];
+%         invM = inv(Mmat);
+        invMC = Mmat\Cmat;
+        
+        s_minus = [state_minus(2); state_minus(4)] - (dq_d - V*([state_minus(1); state_minus(3)] - q_d));
+        s = [state(2); state(4)] - (dq_d - V*([state(1); state(3)] - q_d));
+        s_plus = [state_plus(2); state_plus(4)] - (dq_d - V*([state_plus(1); state_plus(3)] - q_d));
     
+        % dq_r = dq_d - V*(q-q_d)
+        dq_r_minus = dq_d - V * ([state_minus(1); state_minus(3)] - q_d);
+        dq_r = dq_d - V * ([state(1); state(3)] - q_d);
+        dq_r_plus = dq_d - V * ([state_plus(1); state_plus(3)] - q_d);
+        
         % ddq_r = ddq_d - V*(dq - dq_d)
-        ddq_r = ddq_d - V * ([x(wrap_index(p, i) + 2); x(wrap_index(p, i) + 4)] - dq_d);
-    
-        ddq = Mmat\(-(Cmat * s) - (K1 * s) + (K2 * s_minus) + (K2 * s_plus)) + ddq_r;
+        ddq_r = ddq_d - V * ([state(2); state(4)] - dq_d);
 
-        dx(wrap_index(p, i) + 1) = x(wrap_index(p, i) + 2);
+        % Finding ddq using equation (8) and inverse dynamics
+        tau = Mmat*ddq_r + Cmat*dq_r + Gmat - K1*([state(2); state(4)] - dq_r) ...
+                + K2*([state_minus(2); state_minus(4)] - dq_r_minus) ...
+                + K2*([state_plus(2); state_plus(4)] - dq_r_plus);
+        
+        ddq = Mmat\tau - invMC * [state(2); state(4)] - Mmat\Gmat;
+        
+        
+        % Finding ddq by solving the closed loop dynamics in equation (10)
+        % this gives the same result as above
+        ddq_1 = Mmat\(-(Cmat * s) - (K1 * s) + (K2 * s_minus) + (K2 * s_plus)) + ddq_r;
+        
+        dx(wrap_index(p, i) + 1) = state(2);
         dx(wrap_index(p, i) + 2) = ddq(1);
-        dx(wrap_index(p, i) + 3) = x(wrap_index(p, i) + 4);
+        dx(wrap_index(p, i) + 3) = state(4);
         dx(wrap_index(p, i) + 4) = ddq(2);
     end
     dx = dx';

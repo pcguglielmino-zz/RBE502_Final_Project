@@ -7,28 +7,9 @@ clear
 I1=10; I2 = 10; m1=5; r1=.5; m2=5; r2=.5; l1=1; l2=1;
 g=9.8;
 
-% % we compute the parameters in the dynamic model
-% a = I1+I2+m1*r1^2+ m2*(l1^2+ r2^2);
-% b = m2*l1*r2;
-% d = I2+ m2*r2^2;
-
 param = [m1, m2, I1, I2, l1, l2, r1, r2, g];
 
-% symx= sym('X',[4,1]); 
-% 
-% M = [a+2*b*cos(symx(2)), d+b*cos(symx(2));
-%     d+b*cos(symx(2)), d];
-% C = [-b*sin(symx(2))*symx(4), -b*sin(symx(2))*(symx(3)+symx(4)); b*sin(symx(2))*symx(3),0];
-% G = [m1*g*r1*cos(symx(1))+m2*g*(l1*cos(symx(1))+r2*cos(symx(1)+symx(2)));
-%     m2*g*r2*cos(symx(1)+symx(2))];
-% 
-% X = sym('X',[4,1]);
-% M = subs(M, symx, X);
-% C = subs(C, symx, X);
-% G = subs(G, symx, X);
-% invM = inv(M);
-
-p = 3; % Number of robots
+p = 4; % Number of robots
 
 %% Defining the initial and final conditions
 % Naming convention:
@@ -38,20 +19,25 @@ p = 3; % Number of robots
 q1 = [ 0.3; 0; 0.1; 1];
 q2 = [0.2; 1; 0.2; 0];     %random initial conditions position 
 q3 = [ -0.1; 0; 0.5; 1];
+q4 = [0.1; 0.2; 0.1; 0.5];
 
 q(:,:,1) = q1;
 q(:,:,2) = q2;
 q(:,:,3) = q3;
-
+q(:,:,4) = q4;
 
 % Generate trajectory
 tf = 10;
+
+% q = [q_1, v_1, q_2, v_2]
 q0 = [0.3, 0, 0.3, 0];
-qf = [1, 0, 1, 0];
+qf = [1, 0, 0.5, 0];
 
 % Trajectory matrices for joints
+% generate_a_matrix(t0, tf, q0, v0, acc0, qf, vf, accf)
 a1 = generate_a_matrix(0, tf, q0(1), q0(2), 0, qf(1), qf(2), 0);
 a2 = generate_a_matrix(0, tf, q0(3), q0(4), 0, qf(3), qf(4), 0);
+
 
 %% Simulate robots
 
@@ -66,18 +52,37 @@ vec_t = [1; t; t^2; t^3; t^4; t^5]; % quintic polynomials
 q_d = [a1'*vec_t; a2'*vec_t];
 
 figure('Name','Theta_1 following a quintic trajectory');
-plot(T, X(:,1), 'r-', T, X(:,3), 'g-', T, X(:,5), 'b-');
+plot(T, X(:,1), 'r-', T, X(:,5), 'g-', T, X(:,9), 'b-', T, X(:,13), 'y-');
 hold on
 fplot(q_d(1),[0 tf],'k--o');
 grid on
-legend({'State trajectory: Robot 1', 'State trajectory: Robot 2', 'State trajectory: Robot 2', 'Desired state trajectory'},'Location','southwest')
+legend({'State trajectory: Robot 1', 'State trajectory: Robot 2', 'State trajectory: Robot 3', 'State trajectory: Robot 4', 'Desired state trajectory'},'Location','northwest')
 
 figure('Name','Theta_2 following a quintic trajectory');
-plot(T, X(:,2), 'r-', T, X(:,4), 'g-', T, X(:,6), 'b-');
+plot(T, X(:,3), 'r-', T, X(:,7), 'g-', T, X(:,11), 'b-', T, X(:,15), 'y-');
 hold on
 fplot(q_d(2),[0 tf],'k--o');
 grid on
-legend({'State trajectory: Robot 1', 'State trajectory: Robot 2', 'State trajectory: Robot 3', 'Desired state trajectory'},'Location','southwest')
+legend({'State trajectory: Robot 1', 'State trajectory: Robot 2', 'State trajectory: Robot 3', 'State trajectory: Robot 4', 'Desired state trajectory'},'Location','northwest')
+
+
+%% Matrix variables
+
+V = 5 * eye(2);
+K1 = 8 * eye(2);
+K2 = 2 * eye(2);
+zero = zeros(2,2);
+
+
+L = [K1, -K2, zero, -K2;
+    -K2, K1, -K2, zero;
+    zero, -K2, K1, -K2;
+    -K2, zero, -K2, K1];
+
+one = 1/sqrt(p)*[eye(2),eye(2),eye(2),eye(2)]';
+
+D1 = one'*L*one;
+
 
 
 %% Functions to generate trajectory matrix
@@ -93,4 +98,29 @@ function a = generate_a_matrix(t0, tf, q0, v0, acc0, qf, vf, accf)
     a = t_matrix\initial_matrix;
 end
 
-  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
